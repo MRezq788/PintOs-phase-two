@@ -12,10 +12,10 @@ void create(struct intr_frame *f);
 void remove(struct intr_frame *f);
 void open(struct intr_frame *f);
 void filesize(struct intr_frame *f);
-int read(int fd, void* buffer, unsigned size);
-int write(int fd, const void* buffer, unsigned size);
+void read(int fd, void* buffer, unsigned size);
+void write(int fd, const void* buffer, unsigned size);
 void seek(int fd, unsigned position);
-unsigned tell(int fd);
+void tell(int fd);   
 void close(struct intr_frame *f);
 
 #endif /* userprog/syscall.h */

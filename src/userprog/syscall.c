@@ -34,7 +34,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 //cast f->esp into an int*, then dereference it for the SYS_CODE
   switch(*(int*)f->esp)
   {
-    case SYS_HALT:        
+    case SYS_HALT: 
+      halt(f);       
       break;           /* Halt the operating system. */
     case SYS_EXIT:
       exit(f);   
@@ -91,14 +92,10 @@ get_void_ptr(void*** esp){
   return (void*)(*((int*)esp + 2));
 }
 
-// void 
-// syscall_init (void){
-
-// }
-// void 
-// halt(void){
-
-// }
+void 
+halt(struct intr_frame *f){
+   f->eax = shutdown_power_off();
+}
 void 
 exit(struct intr_frame *f){
   //pull the arguments
@@ -109,6 +106,10 @@ exit(struct intr_frame *f){
   cur->status = status;
   //do the functionality
   printf("%s: exit(%d)\n", cur->name, status);
+
+  for (int fd_index = 2; fd_index < 64; fd_index++)
+    file_close(cur->fdt[fd_index]);
+  
   thread_exit();
 }
 // pid_t
@@ -120,7 +121,8 @@ exit(struct intr_frame *f){
 
 // }
 
-void create(struct intr_frame *f) {
+void 
+create(struct intr_frame *f) {
   // pull the arguments
   unsigned initial_size = get_unsigned(&f->esp, 1);
   char* file = get_char_ptr(&f->esp,2);
@@ -132,7 +134,8 @@ void create(struct intr_frame *f) {
   f->eax = filesys_create(file, initial_size);
 }
 
-void remove(struct intr_frame *f) {
+void 
+remove(struct intr_frame *f) {
   //pull the arguments
   char* file_name = get_char_ptr(&f->esp,1);
 
@@ -143,7 +146,8 @@ void remove(struct intr_frame *f) {
   f->eax = filesys_remove(file_name);
 }
 
-void open(struct intr_frame *f) {
+void 
+open(struct intr_frame *f) {
   //pull the arguments
   char* file_name = get_char_ptr(&f->esp,1);
 
@@ -162,7 +166,8 @@ void open(struct intr_frame *f) {
   }
 }
 
-void filesize(struct intr_frame *f) {
+void 
+filesize(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(&f->esp,1);
 
@@ -170,7 +175,7 @@ void filesize(struct intr_frame *f) {
   f->eax = file_length(thread_current()->fdt[fd_index]);
 }
 
-int 
+void 
 read(struct intr_frame *f){
   //pull the arguments
   int fd_index = get_int(&f->esp, 1);
@@ -182,11 +187,12 @@ read(struct intr_frame *f){
   
   //do the functionality
   if (fd_index==0)
-    return input_getc();
+    f->eax = input_getc();
   else
-    return file_read(thread_current()->fdt[fd_index], buffer, size);
+    f->eax = file_read(thread_current()->fdt[fd_index], buffer, size);
 }
-int 
+
+void 
 write(struct intr_frame *f){
   //pull the arguments
   int fd_index = get_int(&f->esp, 1);
@@ -198,10 +204,11 @@ write(struct intr_frame *f){
   
   //do the functionality
   if (fd_index==1)
-    return putbuf(buffer, size);
+    f->eax = putbuf(buffer, size);
   else
-    return file_write(thread_current()->fdt[fd_index], buffer, size);
+    f->eax = file_write(thread_current()->fdt[fd_index], buffer, size);
 }
+
 void 
 seek(struct intr_frame *f){
   //pull the arguments
@@ -211,20 +218,21 @@ seek(struct intr_frame *f){
   //do the functionality
   file_seek(thread_current()->fdt[fd_index], position);
 }
-unsigned 
+
+void 
 tell(struct intr_frame *f){
   //pull the arguments
   int fd_index = get_int(&f->esp, 1);
   
   //do the functionality
-  return file_tell(thread_current()->fdt[fd_index]);
+  f->eax = file_tell(thread_current()->fdt[fd_index]);
 }
 
-void close(struct intr_frame *f) {
+void 
+close(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(&f->esp,1);
 
   //do the functionality
   file_close(thread_current()->fdt[fd_index]);
 }
-
