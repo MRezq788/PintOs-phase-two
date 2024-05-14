@@ -3,6 +3,11 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include <threads/vaddr.h>
+#include <userprog/pagedir.h>
+#include <filesys/directory.h>
+#include <filesys/file.h>
+#include <filesys/filesys.h>
 
 static void syscall_handler (struct intr_frame *);
 static struct lock files_sync_lock;
@@ -39,12 +44,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WAIT:        
       break;           /* Wait for a child process to die. */
     case SYS_CREATE:      
+      create(f);
       break;           /* Create a file. */
-    case SYS_REMOVE:      
+    case SYS_REMOVE:
+      remove(f);
       break;           /* Delete a file. */
-    case SYS_OPEN:        
+    case SYS_OPEN:   
+      open(f);
       break;           /* Open a file. */
-    case SYS_FILESIZE:    
+    case SYS_FILESIZE: 
+      filesize(f);
       break;           /* Obtain a file's size. */
     case SYS_READ:        
       break;           /* Read from a file. */
@@ -54,7 +63,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;           /* Change position in a file. */
     case SYS_TELL:        
       break;           /* Report current position in a file. */
-    case SYS_CLOSE:       
+    case SYS_CLOSE: 
+      close(f);
       break;           /* Close a file. */
   }
   thread_exit ();
@@ -101,22 +111,36 @@ exit(int status){
 // wait(pid_t pid){
 
 // }
-// bool 
-// create(const char* file, unsigned initial_size){
 
-// }
-// bool 
-// remove(const char* file){
+bool create(struct intr_frame *f) {
+  unsigned initial_size = get_unsigned(&f->esp, 1);
+  char* file = get_char_ptr(&f->esp,2);
+  return filesys_create(file, initial_size);
+}
 
-// }
-// int 
-// open(const char* file){
+bool remove(struct intr_frame *f) {
+  char* file_name = get_char_ptr(&f->esp,1);
+  return filesys_remove(file_name);
+}
 
-// }
-// int 
-// filesize(int fd){
+int open(struct intr_frame *f) {
+  char* file_name = get_char_ptr(&f->esp,1);
+  struct file* file = filesys_open(file_name);
+  if (file==NULL) {
+    return -1;
+  }
+  else {
+    int next_fd_index = thread_current()->next_fd++;
+    thread_current()->fdt[next_fd_index] = file;
+    return next_fd_index;
+  }
+}
 
-// }
+int filesize(struct intr_frame *f) {
+  int fd_index = get_int(&f->esp,1);
+  return file_length(thread_current()->fdt[fd_index]);
+}
+
 int 
 read(int fd, void* buffer, unsigned size){
   if (fd==0)
@@ -139,8 +163,9 @@ unsigned
 tell(int fd){
   return file_tell(fd);
 }
-// void 
-// close(int fd){
 
-// }
+void close(struct intr_frame *f) {
+  int fd_index = get_int(&f->esp,1);
+  file_close(thread_current()->fdt[fd_index]);
+}
 
