@@ -112,7 +112,7 @@ exit(int status){
 
 // }
 
-bool create(struct intr_frame *f) {
+void create(struct intr_frame *f) {
   // pull the arguments
   unsigned initial_size = get_unsigned(&f->esp, 1);
   char* file = get_char_ptr(&f->esp,2);
@@ -121,10 +121,10 @@ bool create(struct intr_frame *f) {
   validate_void_pointer((void *)file);
 
   //do the functionality
-  return filesys_create(file, initial_size);
+  f->eax = filesys_create(file, initial_size);
 }
 
-bool remove(struct intr_frame *f) {
+void remove(struct intr_frame *f) {
   //pull the arguments
   char* file_name = get_char_ptr(&f->esp,1);
 
@@ -132,10 +132,10 @@ bool remove(struct intr_frame *f) {
   validate_void_pointer((void*)file_name);
 
   //do the functionality
-  return filesys_remove(file_name);
+  f->eax = filesys_remove(file_name);
 }
 
-int open(struct intr_frame *f) {
+void open(struct intr_frame *f) {
   //pull the arguments
   char* file_name = get_char_ptr(&f->esp,1);
 
@@ -145,21 +145,21 @@ int open(struct intr_frame *f) {
   //do the functionality
   struct file* file = filesys_open(file_name);
   if (file==NULL) {
-    return -1;
+    f->eax = -1;
   }
   else {
     int next_fd_index = thread_current()->next_fd++;
     thread_current()->fdt[next_fd_index] = file;
-    return next_fd_index;
+    f->eax = next_fd_index;
   }
 }
 
-int filesize(struct intr_frame *f) {
+void filesize(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(&f->esp,1);
 
   //do the functionality
-  return file_length(thread_current()->fdt[fd_index]);
+  f->eax = file_length(thread_current()->fdt[fd_index]);
 }
 
 int 
