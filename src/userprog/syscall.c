@@ -3,6 +3,21 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/process.h"
+#include "threads/vaddr.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/shutdown.h"
+#include "devices/input.h"
+#include <string.h>
+#include <stdlib.h>
+#include "syscall.h"
+#include "threads/synch.h"
+#include "userprog/syscall.h"
+#include <stdio.h>
+#include <syscall-nr.h>
+#include "threads/interrupt.h"
+#include "threads/thread.h"
 #include <threads/vaddr.h>
 #include <userprog/pagedir.h>
 #include <filesys/directory.h>
@@ -20,10 +35,13 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init(files_sync_lock);
+     lock_init(&files_sync_lock);
 }
+// function to validate that the address provided by the user is not null and inside my user space
+// and it's mapped in the page table (have a physical address)
 
-static void
+
+static static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   printf ("system call!\n");
@@ -42,7 +60,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;           /* Terminate this process. */
     case SYS_EXEC:        
       break;           /* Start another process. */
-    case SYS_WAIT:        
+    case SYS_WAIT:
+      void *esp = f->esp;
+      int pid = (*((int *)esp + 1));
+      f->eax = wait(pid);     
       break;           /* Wait for a child process to die. */
     case SYS_CREATE:      
       create(f);
@@ -75,6 +96,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   thread_exit ();
 }
 
+int wait(int pid)
+{
+  return process_wait(pid);
+}
+
 int 
 get_int(int** esp, int offset){
   return *((int*)esp + offset);
@@ -102,6 +128,10 @@ exit(struct intr_frame *f){
   int status = get_int(*(int*)f->esp, 1);
 
   struct thread* cur = thread_current();
+  struct thread *curr = thread_current()->parent;
+  if (curr){
+    curr->childState = status;
+  }
   //save exit status at process descriptor
   cur->status = status;
   //do the functionality
@@ -191,7 +221,6 @@ read(struct intr_frame *f){
   else
     f->eax = file_read(thread_current()->fdt[fd_index], buffer, size);
 }
-
 void 
 write(struct intr_frame *f){
   //pull the arguments

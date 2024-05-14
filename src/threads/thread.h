@@ -97,6 +97,13 @@ struct thread
     struct list_elem elem;              /* List element. */
     struct file* fdt[64];
     int next_fd;
+   struct thread* parent;
+   struct list child_list;
+   struct list_elem child_elem;
+   struct file* execFile;
+   int childState;
+   struct semaphore wait_Execution;
+   struct semaphore proper_order;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
