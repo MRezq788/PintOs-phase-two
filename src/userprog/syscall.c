@@ -26,7 +26,8 @@
 
 static void syscall_handler (struct intr_frame *);
 static struct lock files_sync_lock;
-char* get_char_ptr(char*** esp);
+void validate_void_pointer (const void* pt);
+char* get_char_ptr(char*** esp, int offset);
 void* get_void_ptr(void*** esp);
 unsigned get_unsigned(int** esp, int offset);
 int get_int(int** esp, int offset);
@@ -110,12 +111,19 @@ get_unsigned(int** esp, int offset){
   return *((unsigned*)esp + offset);
 }
 char*
-get_char_ptr(char*** esp){
-  return (char*)(*((int*)esp + 1));
+get_char_ptr(char*** esp, int offset){
+  return (char*)(*((int*)esp + offset));
 }
 void*
 get_void_ptr(void*** esp){
   return (void*)(*((int*)esp + 2));
+}
+void validate_void_pointer(const void *pt)
+{
+    if (is_kernel_vaddr(pt) || pt==NULL || pagedir_get_page(thread_current()->pagedir, pt)==NULL) {
+      //exit(-1);
+      printf("exit\n");
+    }
 }
 
 void 
@@ -196,13 +204,18 @@ open(struct intr_frame *f) {
   }
 }
 
-void 
-filesize(struct intr_frame *f) {
+void filesize(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(&f->esp,1);
 
   //do the functionality
-  f->eax = file_length(thread_current()->fdt[fd_index]);
+  struct file* file = thread_current()->fdt[fd_index];
+  if (file!=NULL) {
+    f->eax = file_length(file);
+  }
+  else {
+    f->eax = NULL;
+  }  
 }
 
 void 
