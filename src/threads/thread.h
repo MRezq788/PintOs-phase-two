@@ -4,6 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <filesys/directory.h>
+#include <filesys/file.h>
+#include <filesys/filesys.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -92,7 +95,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    struct file* fdt[64];
+    int next_fd;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
