@@ -37,7 +37,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_HALT:        
       break;           /* Halt the operating system. */
     case SYS_EXIT:
-      exit(get_int(*(int*)f->esp, 1));   
+      exit(f);   
       break;           /* Terminate this process. */
     case SYS_EXEC:        
       break;           /* Start another process. */
@@ -55,13 +55,17 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_FILESIZE: 
       filesize(f);
       break;           /* Obtain a file's size. */
-    case SYS_READ:        
+    case SYS_READ:
+      read(f);        
       break;           /* Read from a file. */
-    case SYS_WRITE:       
+    case SYS_WRITE:
+      write(f);       
       break;           /* Write to a file. */
-    case SYS_SEEK:        
+    case SYS_SEEK:
+      seek(f);        
       break;           /* Change position in a file. */
-    case SYS_TELL:        
+    case SYS_TELL:
+      tell(f);        
       break;           /* Report current position in a file. */
     case SYS_CLOSE: 
       close(f);
@@ -96,10 +100,14 @@ get_void_ptr(void*** esp){
 
 // }
 void 
-exit(int status){
+exit(struct intr_frame *f){
+  //pull the arguments
+  int status = get_int(*(int*)f->esp, 1);
+
   struct thread* cur = thread_current();
   //save exit status at process descriptor
   cur->status = status;
+  //do the functionality
   printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();
 }
@@ -163,26 +171,53 @@ void filesize(struct intr_frame *f) {
 }
 
 int 
-read(int fd, void* buffer, unsigned size){
-  if (fd==0)
+read(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(&f->esp, 1);
+  void* buffer = get_void_ptr(&f->esp);
+  unsigned size = get_unsigned(&f->esp, 3);
+
+  //validate pointers
+  validate_void_pointer((void *)buffer);
+  
+  //do the functionality
+  if (fd_index==0)
     return input_getc();
   else
-    return file_read(fd, buffer, size);
+    return file_read(thread_current()->fdt[fd_index], buffer, size);
 }
 int 
-write(int fd, const void* buffer, unsigned size){
-  if (fd==1)
+write(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(&f->esp, 1);
+  void* buffer = get_void_ptr(&f->esp);
+  unsigned size = get_unsigned(&f->esp, 3);
+
+  //validate pointers
+  validate_void_pointer((void *)buffer);
+  
+  //do the functionality
+  if (fd_index==1)
     return putbuf(buffer, size);
   else
-    return file_write(fd, buffer, size);
+    return file_write(thread_current()->fdt[fd_index], buffer, size);
 }
 void 
-seek(int fd, unsigned position){
-  file_seek(fd, position);
+seek(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(&f->esp, 1);
+  unsigned position = get_unsigned(&f->esp, 2);
+  
+  //do the functionality
+  file_seek(thread_current()->fdt[fd_index], position);
 }
 unsigned 
-tell(int fd){
-  return file_tell(fd);
+tell(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(&f->esp, 1);
+  
+  //do the functionality
+  return file_tell(thread_current()->fdt[fd_index]);
 }
 
 void close(struct intr_frame *f) {
