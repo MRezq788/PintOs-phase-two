@@ -19,10 +19,13 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
+/*Number of the fewest timer ticks of a thread in the blocked list */
+static int64_t minTicks  = 9223372036854775807LL;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
+static struct list blocked_list ;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -35,9 +38,10 @@ static void real_time_delay (int64_t num, int32_t denom);
 void
 timer_init (void) 
 {
+
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-}
+    list_init(&blocked_list);}
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
 void
@@ -89,17 +93,32 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+    ASSERT (intr_get_level () == INTR_ON);
+    enum intr_level tamanLevel = intr_disable() ;
+    int64_t start = timer_ticks ();
+    struct thread *cur = thread_current() ;
+    ASSERT (cur->status == THREAD_RUNNING);
+    cur->ticks = start + ticks;
+    list_insert_ordered(&blocked_list, &cur->blockedelem, &comparison, NULL);
+    thread_block();
+    intr_set_level(tamanLevel);
 }
+/*void
+timer_sleep (int64_t ticks)
+{
+    int64_t start = timer_ticks ();
+
+    ASSERT (intr_get_level () == INTR_ON);
+    while (timer_elapsed (start) < ticks)
+        thread_yield ();
+}*/
+
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
 void
-timer_msleep (int64_t ms) 
+timer_msleep (int64_t ms)
 {
   real_time_sleep (ms, 1000);
 }
@@ -170,10 +189,19 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
-  thread_tick ();
-}
+    ticks++;
 
+    while (!list_empty(&blocked_list)) {
+        struct list_elem *e = list_front(&blocked_list);
+        struct thread *t = list_entry(e, struct thread, blockedelem);
+        if (timer_ticks() < t->ticks)
+            break;
+        list_pop_front(&blocked_list);
+        thread_unblock(t);
+    }
+
+    thread_tick ();
+}
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
 static bool

@@ -92,7 +92,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-
+   int64_t ticks ;
+   struct list_elem blockedelem  ;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct file* fdt[64];
@@ -104,6 +105,7 @@ struct thread
    int childState;
    struct semaphore wait_Execution;
    struct semaphore proper_order;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -148,5 +150,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
+bool
+comparison(struct list_elem *a,struct list_elem *b,void*aux UNUSED) ;
 #endif /* threads/thread.h */
