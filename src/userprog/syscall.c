@@ -32,6 +32,226 @@ void* get_void_ptr(void*** esp);
 unsigned get_unsigned(int** esp, int offset);
 int get_int(int** esp, int offset);
 
+
+
+int 
+get_int(int** esp, int offset){
+  return *((int*)esp + offset);
+}
+unsigned 
+get_unsigned(int** esp, int offset){
+  return *((unsigned*)esp + offset);
+}
+char*
+get_char_ptr(char*** esp, int offset){
+  return (char*)(*((int*)esp + offset));
+}
+void*
+get_void_ptr(void*** esp){
+  return (void*)(*((int*)esp + 2));
+}
+void validate_void_pointer(const void *pt)
+{
+    if (is_kernel_vaddr(pt) || pt==NULL || pagedir_get_page(thread_current()->pagedir, pt)==NULL) {
+      exit_with_status(-1);
+    }
+}
+
+void 
+halt(){
+  shutdown_power_off();
+}
+void 
+exit(struct intr_frame *f){
+  //pull the arguments
+  int status = get_int(f->esp, 1);
+
+  //do the functionality
+  exit_with_status(status);
+}
+
+void 
+exit_with_status(int status) {
+  struct thread* cur = thread_current();
+  // struct thread *curr = thread_current()->parent;
+  // if (curr){
+  //   curr->childState = status;
+  // }
+  // //save exit status at process descriptor
+  // cur->status = status;
+  printf("%s: exit(%d)\n", cur->name, status);
+
+  for (int fd_index = 2; fd_index < 64; fd_index++)
+    file_close(cur->fdt[fd_index]);
+  process_exit();
+  thread_exit();
+}
+void
+exec(struct intr_frame *f){
+  // pull the arguments
+  const char* cmd_line = get_char_ptr(f->esp,1);
+
+  //validate pointers
+  validate_void_pointer((void *)cmd_line);
+  //do the functionality
+  // f->eax =  exececute func;
+}
+void wait(struct intr_frame *f)
+{
+  // pull the arguments
+  int pid = get_int(f->esp, 1);
+
+  //do the functionality
+  while(true)
+    {
+    thread_yield();
+    }
+  // f->eax =  process_wait(pid);
+}
+
+void 
+create(struct intr_frame *f) {
+  // pull the arguments
+  unsigned initial_size = get_unsigned(f->esp, 2);
+  char* file = get_char_ptr(f->esp,1);
+
+  //validate pointers
+  validate_void_pointer((void *)file);
+
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  f->eax = filesys_create(file, initial_size);
+  lock_release(&files_sync_lock);
+}
+
+void 
+remove(struct intr_frame *f) {
+  //pull the arguments
+  char* file_name = get_char_ptr(f->esp,1);
+
+  //validate pointers
+  validate_void_pointer((void*)file_name);
+
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  f->eax = filesys_remove(file_name);
+  lock_release(&files_sync_lock);
+}
+
+void 
+open(struct intr_frame *f) {
+  //pull the arguments
+  char* file_name = get_char_ptr(f->esp,1);
+
+  //validate pointers
+  validate_void_pointer((void*)file_name);
+
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  struct file* file = filesys_open(file_name);
+  lock_release(&files_sync_lock);
+  if (file==NULL) {
+    f->eax = -1;
+  }
+  else {
+    int next_fd_index = thread_current()->next_fd++;
+    thread_current()->fdt[next_fd_index] = file;
+    f->eax = next_fd_index;
+  }
+}
+
+void filesize(struct intr_frame *f) {
+  //pull the arguments
+  int fd_index = get_int(f->esp,1);
+
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  struct file* file = thread_current()->fdt[fd_index];
+  lock_release(&files_sync_lock);
+  if (file!=NULL) {
+    f->eax = file_length(file);
+  }
+  else {
+    f->eax = NULL;
+  }  
+}
+
+void 
+read(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(f->esp, 1);
+  void* buffer = get_void_ptr(f->esp);
+  unsigned size = get_unsigned(f->esp, 3);
+
+  //validate pointers
+  validate_void_pointer((void *)buffer);
+  
+  //do the functionality
+  if (fd_index==0){
+    for(int i=0; i<size; i++)
+      *((char *)buffer+i)= input_getc();
+    f->eax = size;
+  }
+  else{
+    lock_acquire(&files_sync_lock);
+    f->eax = file_read(thread_current()->fdt[fd_index], buffer, size);
+    lock_release(&files_sync_lock);
+  }
+}
+void 
+write(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(f->esp, 1);
+  void* buffer = get_void_ptr(f->esp);
+  unsigned size = get_unsigned(f->esp, 3);
+
+  //validate pointers
+  validate_void_pointer((void *)buffer);
+  
+  //do the functionality
+  if (fd_index==1)
+    putbuf(buffer, size);
+  else{
+    lock_acquire(&files_sync_lock);
+    f->eax = file_write(thread_current()->fdt[fd_index], buffer, size);
+    lock_release(&files_sync_lock);
+  }
+}
+
+void 
+seek(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(f->esp, 1);
+  unsigned position = get_unsigned(f->esp, 2);
+  
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  file_seek(thread_current()->fdt[fd_index], position);
+  lock_release(&files_sync_lock);
+}
+
+void 
+tell(struct intr_frame *f){
+  //pull the arguments
+  int fd_index = get_int(f->esp, 1);
+  
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  f->eax = file_tell(thread_current()->fdt[fd_index]);
+  lock_release(&files_sync_lock);
+}
+
+void 
+close(struct intr_frame *f) {
+  //pull the arguments
+  int fd_index = get_int(f->esp,1);
+
+  //do the functionality
+  lock_acquire(&files_sync_lock);
+  file_close(thread_current()->fdt[fd_index]);
+  lock_release(&files_sync_lock);
+}
+
 void
 syscall_init (void) 
 {
@@ -42,31 +262,29 @@ syscall_init (void)
 // and it's mapped in the page table (have a physical address)
 
 
-static static void
+static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   printf ("system call!\n");
   //first check if f->esp is a valid pointer)
-  // if (f->esp is a bad pointer)
-  //   exit(-1);
+  validate_void_pointer((void*)f->esp);
 
 //cast f->esp into an int*, then dereference it for the SYS_CODE
   switch(*(int*)f->esp)
   {
     case SYS_HALT: 
-      halt(f);       
+      halt();       
       break;           /* Halt the operating system. */
     case SYS_EXIT:
       exit(f);   
       break;           /* Terminate this process. */
-    case SYS_EXEC:        
+    case SYS_EXEC:
+      exec(f);        
       break;           /* Start another process. */
     case SYS_WAIT:
-      void *esp = f->esp;
-      int pid = (*((int *)esp + 1));
-      f->eax = wait(pid);     
+      wait(f);     
       break;           /* Wait for a child process to die. */
-    case SYS_CREATE:      
+    case SYS_CREATE:  
       create(f);
       break;           /* Create a file. */
     case SYS_REMOVE:
@@ -93,188 +311,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CLOSE: 
       close(f);
       break;           /* Close a file. */
+    default:
+      exit_with_status(-1); 
   }
-  thread_exit ();
-}
-
-int wait(int pid)
-{
-  return process_wait(pid);
-}
-
-int 
-get_int(int** esp, int offset){
-  return *((int*)esp + offset);
-}
-unsigned 
-get_unsigned(int** esp, int offset){
-  return *((unsigned*)esp + offset);
-}
-char*
-get_char_ptr(char*** esp, int offset){
-  return (char*)(*((int*)esp + offset));
-}
-void*
-get_void_ptr(void*** esp){
-  return (void*)(*((int*)esp + 2));
-}
-void validate_void_pointer(const void *pt)
-{
-    if (is_kernel_vaddr(pt) || pt==NULL || pagedir_get_page(thread_current()->pagedir, pt)==NULL) {
-      //exit(-1);
-      printf("exit\n");
-    }
-}
-
-void 
-halt(struct intr_frame *f){
-   f->eax = shutdown_power_off();
-}
-void 
-exit(struct intr_frame *f){
-  //pull the arguments
-  int status = get_int(*(int*)f->esp, 1);
-
-  struct thread* cur = thread_current();
-  struct thread *curr = thread_current()->parent;
-  if (curr){
-    curr->childState = status;
-  }
-  //save exit status at process descriptor
-  cur->status = status;
-  //do the functionality
-  printf("%s: exit(%d)\n", cur->name, status);
-
-  for (int fd_index = 2; fd_index < 64; fd_index++)
-    file_close(cur->fdt[fd_index]);
-  
-  thread_exit();
-}
-// pid_t
-//  exec(const char* cmd_line){
-
-// }
-// int 
-// wait(pid_t pid){
-
-// }
-
-void 
-create(struct intr_frame *f) {
-  // pull the arguments
-  unsigned initial_size = get_unsigned(&f->esp, 1);
-  char* file = get_char_ptr(&f->esp,2);
-
-  //validate pointers
-  validate_void_pointer((void *)file);
-
-  //do the functionality
-  f->eax = filesys_create(file, initial_size);
-}
-
-void 
-remove(struct intr_frame *f) {
-  //pull the arguments
-  char* file_name = get_char_ptr(&f->esp,1);
-
-  //validate pointers
-  validate_void_pointer((void*)file_name);
-
-  //do the functionality
-  f->eax = filesys_remove(file_name);
-}
-
-void 
-open(struct intr_frame *f) {
-  //pull the arguments
-  char* file_name = get_char_ptr(&f->esp,1);
-
-  //validate pointers
-  validate_void_pointer((void*)file_name);
-
-  //do the functionality
-  struct file* file = filesys_open(file_name);
-  if (file==NULL) {
-    f->eax = -1;
-  }
-  else {
-    int next_fd_index = thread_current()->next_fd++;
-    thread_current()->fdt[next_fd_index] = file;
-    f->eax = next_fd_index;
-  }
-}
-
-void filesize(struct intr_frame *f) {
-  //pull the arguments
-  int fd_index = get_int(&f->esp,1);
-
-  //do the functionality
-  struct file* file = thread_current()->fdt[fd_index];
-  if (file!=NULL) {
-    f->eax = file_length(file);
-  }
-  else {
-    f->eax = NULL;
-  }  
-}
-
-void 
-read(struct intr_frame *f){
-  //pull the arguments
-  int fd_index = get_int(&f->esp, 1);
-  void* buffer = get_void_ptr(&f->esp);
-  unsigned size = get_unsigned(&f->esp, 3);
-
-  //validate pointers
-  validate_void_pointer((void *)buffer);
-  
-  //do the functionality
-  if (fd_index==0)
-    f->eax = input_getc();
-  else
-    f->eax = file_read(thread_current()->fdt[fd_index], buffer, size);
-}
-void 
-write(struct intr_frame *f){
-  //pull the arguments
-  int fd_index = get_int(&f->esp, 1);
-  void* buffer = get_void_ptr(&f->esp);
-  unsigned size = get_unsigned(&f->esp, 3);
-
-  //validate pointers
-  validate_void_pointer((void *)buffer);
-  
-  //do the functionality
-  if (fd_index==1)
-    f->eax = putbuf(buffer, size);
-  else
-    f->eax = file_write(thread_current()->fdt[fd_index], buffer, size);
-}
-
-void 
-seek(struct intr_frame *f){
-  //pull the arguments
-  int fd_index = get_int(&f->esp, 1);
-  unsigned position = get_unsigned(&f->esp, 2);
-  
-  //do the functionality
-  file_seek(thread_current()->fdt[fd_index], position);
-}
-
-void 
-tell(struct intr_frame *f){
-  //pull the arguments
-  int fd_index = get_int(&f->esp, 1);
-  
-  //do the functionality
-  f->eax = file_tell(thread_current()->fdt[fd_index]);
-}
-
-void 
-close(struct intr_frame *f) {
-  //pull the arguments
-  int fd_index = get_int(&f->esp,1);
-
-  //do the functionality
-  file_close(thread_current()->fdt[fd_index]);
 }

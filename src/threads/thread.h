@@ -103,8 +103,8 @@ struct thread
    struct list_elem child_elem;
    struct file* execFile;
    int childState;
-   struct semaphore wait_Execution;
-   struct semaphore proper_order;
+   struct semaphore* wait_Execution;
+   struct semaphore* proper_order;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
