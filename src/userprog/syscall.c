@@ -168,6 +168,9 @@ void filesize(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(f->esp,1);
 
+  //check validity of fd
+  if (fd_index<0 || fd_index >=64) return;
+
   //do the functionality
   lock_acquire(&files_sync_lock);
   struct file* file = thread_current()->fdt[fd_index];
