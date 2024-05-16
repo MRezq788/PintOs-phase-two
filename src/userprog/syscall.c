@@ -36,18 +36,22 @@ int get_int(int** esp, int offset);
 
 int 
 get_int(int** esp, int offset){
+  validate_void_pointer((void*)((int*)esp + offset));
   return *((int*)esp + offset);
 }
 unsigned 
 get_unsigned(int** esp, int offset){
+  validate_void_pointer((void*)((unsigned*)esp + offset));
   return *((unsigned*)esp + offset);
 }
 char*
 get_char_ptr(char*** esp, int offset){
+  validate_void_pointer((void*)(((int*)esp + offset)));
   return (char*)(*((int*)esp + offset));
 }
 void*
 get_void_ptr(void*** esp){
+  validate_void_pointer((void*)(((int*)esp + 2)));
   return (void*)(*((int*)esp + 2));
 }
 void validate_void_pointer(const void *pt)
@@ -246,9 +250,13 @@ close(struct intr_frame *f) {
   //pull the arguments
   int fd_index = get_int(f->esp,1);
 
+  //check validity of fd
+  if (fd_index<0 || fd_index >=64) return;
+  
   //do the functionality
   lock_acquire(&files_sync_lock);
   file_close(thread_current()->fdt[fd_index]);
+  thread_current()->fdt[fd_index] = NULL;
   lock_release(&files_sync_lock);
 }
 
